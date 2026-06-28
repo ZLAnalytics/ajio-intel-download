@@ -3,63 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <title>AJIO Intel — Generating Excel...</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Arial, sans-serif;
-            background: #0f1923;
-            color: #e8edf2;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            background: #0f1923; color: #e8edf2;
+            min-height: 100vh; display: flex;
+            align-items: center; justify-content: center;
         }
         .card {
-            background: #1a2535;
-            border: 1px solid #2a3a50;
-            border-radius: 16px;
-            padding: 48px;
-            width: 100%;
-            max-width: 480px;
-            text-align: center;
+            background: #1a2535; border: 1px solid #2a3a50;
+            border-radius: 16px; padding: 48px;
+            width: 100%; max-width: 480px; text-align: center;
             box-shadow: 0 8px 32px rgba(0,0,0,0.4);
         }
         .logo { font-size: 12px; font-weight: 700; letter-spacing: 3px; color: #4a9eff; margin-bottom: 20px; }
         h1 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
         .sub { font-size: 13px; color: #6b7e96; margin-bottom: 32px; }
         .spinner {
-            width: 48px; height: 48px;
-            border: 4px solid #2a3a50;
-            border-top-color: #4a9eff;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            margin: 0 auto 24px;
+            width: 48px; height: 48px; border: 4px solid #2a3a50;
+            border-top-color: #4a9eff; border-radius: 50%;
+            animation: spin 0.8s linear infinite; margin: 0 auto 24px;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         .status { font-size: 14px; color: #4a9eff; margin-bottom: 8px; font-weight: 600; }
         .detail { font-size: 12px; color: #6b7e96; }
         .done-icon { font-size: 48px; margin-bottom: 16px; }
-        .btn {
-            display: inline-block;
-            margin-top: 20px;
-            padding: 12px 28px;
-            background: #22c55e;
-            color: #fff;
-            font-size: 14px;
-            font-weight: 700;
-            border-radius: 10px;
-            text-decoration: none;
-            cursor: pointer;
-            border: none;
-        }
         .error { color: #ef5a5a; font-size: 13px; margin-top: 16px; }
     </style>
 </head>
 <body>
 <div class="card">
     <div class="logo">AJIO INTEL</div>
-
     <div id="loadingView">
         <div class="spinner"></div>
         <h1>Generating Excel</h1>
@@ -67,14 +43,12 @@
         <div class="status" id="statusText">Reading data...</div>
         <div class="detail" id="detailText"></div>
     </div>
-
     <div id="doneView" style="display:none">
         <div class="done-icon">✅</div>
         <h1>Excel Ready!</h1>
         <p class="sub" id="doneDetail">Your file has been downloaded.</p>
         <p class="detail" style="margin-top:12px;color:#4a5a6a;">You can close this tab.</p>
     </div>
-
     <div id="errorView" style="display:none">
         <div class="done-icon">❌</div>
         <h1>Something went wrong</h1>
@@ -83,37 +57,31 @@
 </div>
 
 <script>
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
+// ── UI helpers ────────────────────────────────────────────────────────────────
 function setStatus(msg, detail) {
     document.getElementById("statusText").textContent = msg;
     document.getElementById("detailText").textContent = detail || "";
 }
-
 function showDone(detail) {
     document.getElementById("loadingView").style.display = "none";
     document.getElementById("doneView").style.display    = "block";
     if (detail) document.getElementById("doneDetail").textContent = detail;
 }
-
 function showError(msg) {
     document.getElementById("loadingView").style.display = "none";
     document.getElementById("errorView").style.display   = "block";
     document.getElementById("errorText").textContent     = msg;
 }
 
-// ── Parse multi-section CSV ───────────────────────────────────────────────────
-
+// ── Parse CSV sections ────────────────────────────────────────────────────────
 function parseSections(csvText) {
     const sections = {};
-    let current    = null;
-    let lines      = [];
-
+    let current = null, lines = [];
     for (const line of csvText.split("\n")) {
         if (line.startsWith("=== ") && line.endsWith(" ===")) {
             if (current && lines.length) sections[current] = lines.join("\n");
-            current = line.replace("=== ", "").replace(" ===", "").trim();
-            lines   = [];
+            current = line.replace(/=== | ===/g, "").trim();
+            lines = [];
         } else if (line.trim()) {
             lines.push(line);
         }
@@ -122,23 +90,16 @@ function parseSections(csvText) {
     return sections;
 }
 
-function csvToArray(csv) {
+function csvToRows(csv) {
     const rows = [];
-    for (const line of csv.split("\n")) {
+    for (const line of csv.replace(/^\uFEFF/, "").split("\n")) {
         if (!line.trim()) continue;
-        // Simple CSV parse (handles quoted fields)
-        const row = [];
-        let inQuote = false, field = "";
+        const row = []; let inQ = false, field = "";
         for (let i = 0; i < line.length; i++) {
             const ch = line[i];
-            if (ch === '"') {
-                if (inQuote && line[i+1] === '"') { field += '"'; i++; }
-                else inQuote = !inQuote;
-            } else if (ch === "," && !inQuote) {
-                row.push(field); field = "";
-            } else {
-                field += ch;
-            }
+            if (ch === '"') { if (inQ && line[i+1]==='"') { field+='"'; i++; } else inQ=!inQ; }
+            else if (ch === ',' && !inQ) { row.push(field); field = ""; }
+            else field += ch;
         }
         row.push(field);
         rows.push(row);
@@ -146,241 +107,184 @@ function csvToArray(csv) {
     return rows;
 }
 
-// ── Excel styling ─────────────────────────────────────────────────────────────
-
-// Exact colors from Python scraper output
-// Header: navy #1F3864, white text
-// Alt row: light blue-grey #EEF2F7
-// Border: #D0D7E3
-
-const BORDER = {
-    top:    { style: "thin", color: { rgb: "D0D7E3" } },
-    bottom: { style: "thin", color: { rgb: "D0D7E3" } },
-    left:   { style: "thin", color: { rgb: "D0D7E3" } },
-    right:  { style: "thin", color: { rgb: "D0D7E3" } },
+// ── Styles ────────────────────────────────────────────────────────────────────
+const HEADER_FILL  = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F3864" } };
+const ALT_FILL     = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEEF2F7" } };
+const HEADER_FONT  = { bold: true,  color: { argb: "FFFFFFFF" }, name: "Arial", size: 10 };
+const BODY_FONT    = { bold: false, color: { argb: "FF000000" }, name: "Arial", size: 10 };
+const THIN_BORDER  = {
+    top:    { style: "thin", color: { argb: "FFD0D7E3" } },
+    bottom: { style: "thin", color: { argb: "FFD0D7E3" } },
+    left:   { style: "thin", color: { argb: "FFD0D7E3" } },
+    right:  { style: "thin", color: { argb: "FFD0D7E3" } },
 };
 
-const HEADER_STYLE = {
-    font:      { bold: true, color: { rgb: "FFFFFF" }, name: "Arial", sz: 10 },
-    fill:      { type: "pattern", patternType: "solid", fgColor: { rgb: "1F3864" } },
-    alignment: { horizontal: "center", vertical: "center", wrapText: false },
-    border:    BORDER,
+const COL_WIDTHS = {
+    "Product ID": 22, "Scraped Date": 20, "Search Rank": 12,
+    "Brand": 20, "Product Name": 40, "Tag": 12, "Sold Out": 10,
+    "Product Category": 25, "Price Band": 12,
+    "Selling Price": 14, "MRP": 12, "1-(Selling Price/MRP)": 22,
+    "Discount % (Scraped)": 20, "Discount % (Calc)": 18,
+    "Rating": 10, "No. of Reviews": 15, "Product URL": 50,
 };
 
-const ALT_STYLE = {
-    font:      { bold: false, color: { rgb: "000000" }, name: "Arial", sz: 10 },
-    fill:      { type: "pattern", patternType: "solid", fgColor: { rgb: "EEF2F7" } },
-    alignment: { horizontal: "left", vertical: "center" },
-    border:    BORDER,
-};
+const PCT_COLS = [
+    "Discount % (Scraped)", "Discount % (Calc)", "1-(Selling Price/MRP)",
+    "Avg_Discount_Pct", "Avg_Discount", "SKU Share %", "Avg Discount % (Calc)"
+];
+const CURR_COLS = [
+    "Selling Price", "MRP", "Avg_Selling_Price", "Avg_MRP",
+    "Avg_Price", "Avg Selling Price", "Avg MRP"
+];
 
-const ALT_CENTER_STYLE = {
-    font:      { bold: false, color: { rgb: "000000" }, name: "Arial", sz: 10 },
-    fill:      { type: "pattern", patternType: "solid", fgColor: { rgb: "EEF2F7" } },
-    alignment: { horizontal: "center", vertical: "center" },
-    border:    BORDER,
-};
-
-const BODY_STYLE = {
-    font:      { bold: false, color: { rgb: "000000" }, name: "Arial", sz: 10 },
-    fill:      { type: "pattern", patternType: "none" },
-    alignment: { horizontal: "left", vertical: "center" },
-    border:    BORDER,
-};
-
-const BODY_CENTER_STYLE = {
-    font:      { bold: false, color: { rgb: "000000" }, name: "Arial", sz: 10 },
-    fill:      { type: "pattern", patternType: "none" },
-    alignment: { horizontal: "center", vertical: "center" },
-    border:    BORDER,
-};
-
-function styleCell(cell, style) {
-    cell.s = style;
-}
-
-function buildSheet(wb, sheetName, rows, pctCols, currencyCols, colWidths) {
-    if (!rows || rows.length < 2) return;
-
-    const ws      = {};
+// ── Build sheet ───────────────────────────────────────────────────────────────
+function addSheet(wb, name, rows) {
+    if (!rows || rows.length < 1) return;
+    const ws      = wb.addWorksheet(name);
     const headers = rows[0];
-    const range   = { s: { c:0, r:0 }, e: { c: headers.length-1, r: rows.length-1 } };
 
-    rows.forEach((row, r) => {
-        row.forEach((val, c) => {
-            const addr = XLSX.utils.encode_cell({ r, c });
-            let v = val;
-            let t = "s";
-            let z = undefined;
+    // Set column widths
+    ws.columns = headers.map(h => ({
+        key:   h,
+        width: COL_WIDTHS[h] || 18,
+    }));
 
-            // Convert numbers
-            if (r > 0) {
-                const num = parseFloat(String(val).replace(/[₹,%]/g, "").replace(/,/g,"").trim());
-                if (!isNaN(num) && val !== "" && val !== null && val !== undefined) {
-                    // Percentage columns
-                    if (pctCols && pctCols.includes(headers[c])) {
-                        v = num > 1 ? num / 100 : num;
-                        t = "n";
-                        z = "0.0%";
+    rows.forEach((row, ri) => {
+        const exRow = ws.addRow(row);
+        const isHdr = ri === 0;
+        const isAlt = !isHdr && ri % 2 === 0;
+
+        exRow.eachCell({ includeEmpty: true }, (cell, ci) => {
+            // Font
+            cell.font   = isHdr ? HEADER_FONT : BODY_FONT;
+            // Fill
+            cell.fill   = isHdr ? HEADER_FILL : (isAlt ? ALT_FILL : { type: "pattern", pattern: "none" });
+            // Border
+            cell.border = THIN_BORDER;
+            // Alignment
+            const hdr = headers[ci - 1] || "";
+            if (isHdr) {
+                cell.alignment = { horizontal: "center", vertical: "middle" };
+            } else if (typeof cell.value === "number") {
+                cell.alignment = { horizontal: "center", vertical: "middle" };
+            } else {
+                cell.alignment = { horizontal: "left", vertical: "middle" };
+            }
+
+            // Number formatting
+            if (!isHdr && cell.value !== null && cell.value !== undefined && cell.value !== "") {
+                if (PCT_COLS.includes(hdr)) {
+                    // Convert percentage string to decimal
+                    let v = cell.value;
+                    if (typeof v === "string" && v.includes("%")) {
+                        v = parseFloat(v.replace("%","").trim()) / 100;
+                    } else if (typeof v === "number" && v > 1) {
+                        v = v / 100;
                     }
-                    // Currency columns
-                    else if (currencyCols && currencyCols.includes(headers[c])) {
-                        v = num;
-                        t = "n";
-                        z = '₹#,##0';
-                    }
-                    // Plain number
-                    else if (
-                        String(val).trim() !== "" &&
-                        !String(val).includes("-") &&
-                        !String(val).includes("https")
-                    ) {
-                        v = num;
-                        t = "n";
+                    cell.value        = isNaN(v) ? cell.value : v;
+                    cell.numFmt       = "0.0%";
+                    cell.alignment    = { horizontal: "center", vertical: "middle" };
+                } else if (CURR_COLS.includes(hdr)) {
+                    const v = typeof cell.value === "string"
+                        ? parseFloat(cell.value.replace(/[₹,]/g,"").trim())
+                        : cell.value;
+                    cell.value  = isNaN(v) ? cell.value : v;
+                    cell.numFmt = '₹#,##0';
+                    cell.alignment = { horizontal: "center", vertical: "middle" };
+                } else {
+                    // Try to parse as number
+                    if (typeof cell.value === "string") {
+                        const n = parseFloat(cell.value.replace(/,/g,""));
+                        if (!isNaN(n) && cell.value.trim() !== "" &&
+                            !cell.value.includes("http") &&
+                            !cell.value.includes("-") &&
+                            !cell.value.match(/[a-zA-Z]/)) {
+                            cell.value = n;
+                        }
                     }
                 }
             }
-
-            const cell = { v, t };
-            if (z) cell.z = z;
-            // Determine if value is numeric for center alignment
-            const isNum = (t === "n");
-            if (r === 0) {
-                cell.s = HEADER_STYLE;
-            } else if (r % 2 === 0) {
-                cell.s = isNum ? ALT_CENTER_STYLE : ALT_STYLE;
-            } else {
-                cell.s = isNum ? BODY_CENTER_STYLE : BODY_STYLE;
-            }
-            ws[addr] = cell;
         });
+
+        // Header row height
+        if (isHdr) exRow.height = 20;
     });
 
-    ws["!ref"] = XLSX.utils.encode_range(range);
-
-    // Column widths
-    if (colWidths) {
-        ws["!cols"] = headers.map(h => ({ wch: colWidths[h] || 15 }));
-    } else {
-        ws["!cols"] = headers.map(() => ({ wch: 18 }));
-    }
-
-    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    // Freeze header + auto filter
+    ws.views = [{ state: "frozen", ySplit: 1 }];
+    ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: headers.length } };
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-
 async function generateExcel(csvData, brandName) {
-    setStatus("Parsing data...", "Reading all sections");
-
+    setStatus("Parsing sections...");
     const sections = parseSections(csvData);
-    const keys     = Object.keys(sections);
+    const wb       = new ExcelJS.Workbook();
 
-    if (!keys.length) throw new Error("No data sections found in CSV");
+    wb.creator  = "AJIO Intel";
+    wb.created  = new Date();
 
-    setStatus("Building Excel...", `Found ${keys.length} sheets`);
+    const sheetConfig = [
+        { key: "Raw Data",       pct: PCT_COLS, curr: CURR_COLS },
+        { key: "Brand Summary",  pct: PCT_COLS, curr: CURR_COLS },
+        { key: "Tag Summary",    pct: PCT_COLS, curr: CURR_COLS },
+        { key: "Price Band",     pct: PCT_COLS, curr: CURR_COLS },
+        { key: "Search Summary", pct: PCT_COLS, curr: CURR_COLS },
+    ];
 
-    const wb = XLSX.utils.book_new();
-
-    // Raw Data
-    if (sections["Raw Data"]) {
-        const rows = csvToArray(sections["Raw Data"]);
-        buildSheet(wb, "Raw Data", rows,
-            ["Discount % (Scraped)", "Discount % (Calc)", "1-(Selling Price/MRP)"],
-            ["Selling Price", "MRP"],
-            {
-                "Product ID": 22, "Scraped Date": 20, "Search Rank": 12,
-                "Brand": 20, "Product Name": 40, "Tag": 12, "Sold Out": 10,
-                "Product Category": 25, "Price Band": 12,
-                "Selling Price": 14, "MRP": 12,
-                "1-(Selling Price/MRP)": 22,
-                "Discount % (Scraped)": 20, "Discount % (Calc)": 18,
-                "Rating": 10, "No. of Reviews": 15, "Product URL": 50,
-            }
-        );
-        setStatus("Building Excel...", "Raw Data ✓");
+    for (const cfg of sheetConfig) {
+        if (sections[cfg.key]) {
+            setStatus(`Building ${cfg.key}...`);
+            await new Promise(r => setTimeout(r, 50));
+            const rows = csvToRows(sections[cfg.key]);
+            addSheet(wb, cfg.key, rows);
+        }
     }
 
-    // Brand Summary
-    if (sections["Brand Summary"]) {
-        const rows = csvToArray(sections["Brand Summary"]);
-        buildSheet(wb, "Brand Summary", rows,
-            ["Avg_Discount_Pct"],
-            ["Avg_Selling_Price", "Avg_MRP"]
-        );
-        setStatus("Building Excel...", "Brand Summary ✓");
-    }
+    setStatus("Saving Excel file...");
+    await new Promise(r => setTimeout(r, 100));
 
-    // Tag Summary
-    if (sections["Tag Summary"]) {
-        const rows = csvToArray(sections["Tag Summary"]);
-        buildSheet(wb, "Tag Summary", rows,
-            ["Avg_Discount_Pct", "SKU Share %"],
-            ["Avg_Selling_Price", "Avg_MRP"]
-        );
-        setStatus("Building Excel...", "Tag Summary ✓");
-    }
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob   = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    });
 
-    // Price Band
-    if (sections["Price Band"]) {
-        const rows = csvToArray(sections["Price Band"]);
-        buildSheet(wb, "Price Band", rows,
-            ["Avg_Discount", "SKU Share %"],
-            ["Avg_Price"]
-        );
-        setStatus("Building Excel...", "Price Band ✓");
-    }
+    // Trigger download
+    const now    = new Date();
+    const pad    = n => String(n).padStart(2,"0");
+    const date   = `${pad(now.getDate())}-${pad(now.getMonth()+1)}-${now.getFullYear()}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
+    const safe   = (brandName||"Brand").replace(/[^a-zA-Z0-9]/g,"_");
+    const fname  = `Ajio_${safe}_${date}.xlsx`;
 
-    // Search Summary
-    if (sections["Search Summary"]) {
-        const rows = csvToArray(sections["Search Summary"]);
-        buildSheet(wb, "Search Summary", rows,
-            ["Avg Discount % (Calc)"],
-            ["Avg Selling Price", "Avg MRP"]
-        );
-        setStatus("Building Excel...", "Search Summary ✓");
-    }
-
-    setStatus("Downloading...", "Saving Excel file");
-
-    // Generate filename
-    const now     = new Date();
-    const pad     = n => String(n).padStart(2,"0");
-    const dateStr = `${pad(now.getDate())}-${pad(now.getMonth()+1)}-${now.getFullYear()}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
-    const safe    = (brandName || "Brand").replace(/[^a-zA-Z0-9]/g,"_");
-    const fname   = `Ajio_${safe}_${dateStr}.xlsx`;
-
-    XLSX.writeFile(wb, fname, { bookSST: false, type: "binary", cellStyles: true });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = fname;
+    a.click();
+    URL.revokeObjectURL(url);
 
     return fname;
 }
 
-// ── Entry point ───────────────────────────────────────────────────────────────
-
+// ── Entry ─────────────────────────────────────────────────────────────────────
 window.addEventListener("load", async () => {
     try {
-        // Get data from URL hash or localStorage
         const hash = window.location.hash.slice(1);
-        let csvData   = null;
-        let brandName = "Brand";
+        let csvData = null, brandName = "Brand";
 
         if (hash) {
-            // Data passed via URL hash (base64 encoded)
-            setStatus("Reading data from extension...");
             try {
                 const decoded = decodeURIComponent(atob(hash));
                 const parsed  = JSON.parse(decoded);
                 csvData   = parsed.csv;
                 brandName = parsed.brand || "Brand";
-            } catch (e) {
-                // Try without decodeURIComponent
+            } catch {
                 const decoded = atob(hash);
                 const parsed  = JSON.parse(decoded);
                 csvData   = parsed.csv;
                 brandName = parsed.brand || "Brand";
             }
         } else {
-            // Fallback: try localStorage
             csvData   = localStorage.getItem("ajio_intel_csv");
             brandName = localStorage.getItem("ajio_intel_brand") || "Brand";
             localStorage.removeItem("ajio_intel_csv");
@@ -392,8 +296,8 @@ window.addEventListener("load", async () => {
             return;
         }
 
-        setStatus("Generating Excel file...", `Brand: ${brandName}`);
-        await new Promise(r => setTimeout(r, 100)); // let UI update
+        setStatus("Generating Excel...", `Brand: ${brandName}`);
+        await new Promise(r => setTimeout(r, 100));
 
         const fname = await generateExcel(csvData, brandName);
         showDone(`${fname} downloaded successfully.`);
