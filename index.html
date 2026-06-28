@@ -339,10 +339,18 @@ window.addEventListener("load", async () => {
         if (hash) {
             // Data passed via URL hash (base64 encoded)
             setStatus("Reading data from extension...");
-            const decoded = decodeURIComponent(atob(hash));
-            const parsed  = JSON.parse(decoded);
-            csvData   = parsed.csv;
-            brandName = parsed.brand || "Brand";
+            try {
+                const decoded = decodeURIComponent(atob(hash));
+                const parsed  = JSON.parse(decoded);
+                csvData   = parsed.csv;
+                brandName = parsed.brand || "Brand";
+            } catch (e) {
+                // Try without decodeURIComponent
+                const decoded = atob(hash);
+                const parsed  = JSON.parse(decoded);
+                csvData   = parsed.csv;
+                brandName = parsed.brand || "Brand";
+            }
         } else {
             // Fallback: try localStorage
             csvData   = localStorage.getItem("ajio_intel_csv");
