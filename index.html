@@ -148,27 +148,51 @@ function csvToArray(csv) {
 
 // ── Excel styling ─────────────────────────────────────────────────────────────
 
+// Exact colors from Python scraper output
+// Header: navy #1F3864, white text
+// Alt row: light blue-grey #EEF2F7
+// Border: #D0D7E3
+
+const BORDER = {
+    top:    { style: "thin", color: { rgb: "D0D7E3" } },
+    bottom: { style: "thin", color: { rgb: "D0D7E3" } },
+    left:   { style: "thin", color: { rgb: "D0D7E3" } },
+    right:  { style: "thin", color: { rgb: "D0D7E3" } },
+};
+
 const HEADER_STYLE = {
     font:      { bold: true, color: { rgb: "FFFFFF" }, name: "Arial", sz: 10 },
-    fill:      { fgColor: { rgb: "1F3864" }, patternType: "solid" },
-    alignment: { horizontal: "center", vertical: "center" },
-    border: {
-        top:    { style: "thin", color: { rgb: "D0D7E3" } },
-        bottom: { style: "thin", color: { rgb: "D0D7E3" } },
-        left:   { style: "thin", color: { rgb: "D0D7E3" } },
-        right:  { style: "thin", color: { rgb: "D0D7E3" } },
-    }
+    fill:      { type: "pattern", patternType: "solid", fgColor: { rgb: "1F3864" } },
+    alignment: { horizontal: "center", vertical: "center", wrapText: false },
+    border:    BORDER,
 };
 
 const ALT_STYLE = {
-    font:  { name: "Arial", sz: 10 },
-    fill:  { fgColor: { rgb: "EEF2F7" }, patternType: "solid" },
-    border: HEADER_STYLE.border,
+    font:      { bold: false, color: { rgb: "000000" }, name: "Arial", sz: 10 },
+    fill:      { type: "pattern", patternType: "solid", fgColor: { rgb: "EEF2F7" } },
+    alignment: { horizontal: "left", vertical: "center" },
+    border:    BORDER,
+};
+
+const ALT_CENTER_STYLE = {
+    font:      { bold: false, color: { rgb: "000000" }, name: "Arial", sz: 10 },
+    fill:      { type: "pattern", patternType: "solid", fgColor: { rgb: "EEF2F7" } },
+    alignment: { horizontal: "center", vertical: "center" },
+    border:    BORDER,
 };
 
 const BODY_STYLE = {
-    font:  { name: "Arial", sz: 10 },
-    border: HEADER_STYLE.border,
+    font:      { bold: false, color: { rgb: "000000" }, name: "Arial", sz: 10 },
+    fill:      { type: "pattern", patternType: "none" },
+    alignment: { horizontal: "left", vertical: "center" },
+    border:    BORDER,
+};
+
+const BODY_CENTER_STYLE = {
+    font:      { bold: false, color: { rgb: "000000" }, name: "Arial", sz: 10 },
+    fill:      { type: "pattern", patternType: "none" },
+    alignment: { horizontal: "center", vertical: "center" },
+    border:    BORDER,
 };
 
 function styleCell(cell, style) {
@@ -219,10 +243,14 @@ function buildSheet(wb, sheetName, rows, pctCols, currencyCols, colWidths) {
 
             const cell = { v, t };
             if (z) cell.z = z;
+            // Determine if value is numeric for center alignment
+            const isNum = (t === "n");
             if (r === 0) {
                 cell.s = HEADER_STYLE;
+            } else if (r % 2 === 0) {
+                cell.s = isNum ? ALT_CENTER_STYLE : ALT_STYLE;
             } else {
-                cell.s = r % 2 === 0 ? ALT_STYLE : BODY_STYLE;
+                cell.s = isNum ? BODY_CENTER_STYLE : BODY_STYLE;
             }
             ws[addr] = cell;
         });
